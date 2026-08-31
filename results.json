@@ -1,0 +1,23 @@
+{
+  "runs": [],
+  "schema": {
+    "run_id": "string",
+    "timestamp": "iso8601",
+    "board": "string",
+    "jetpack": "string",
+    "tensorrt": "string",
+    "model": "string",
+    "input_res": "int",
+    "precision": "fp16 | int8",
+    "calib_imgs": "int | null",
+    "calib_batch_size": "int | null",
+    "calib_scheme": "per-tensor | per-channel | mixed | null",
+    "nvpmodel_mode": "string",
+    "jetson_clocks": "bool",
+    "n_warmup_discarded": "int",
+    "latency_ms": {"p50": "float", "p95": "float"},
+    "fps": "float",
+    "map_50_95": "float",
+    "power_w": {"mean": "float", "source": "tegrastats | external_meter"}
+  }
+}

@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.env
+*.engine
+*.onnx
+calib/images/
+calib/*.table
+calib/*.cache
+datasets/
+
+# local working docs — not for the public repo
+SPEC.md
+TODO.md
+progress.md
