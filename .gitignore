@@ -2,8 +2,15 @@ __pycache__/
 *.pyc
 .env
 *.engine
-*.onnx
+
 calib/images/
 calib/*.table
 calib/*.cache
 datasets/
+
+# build outputs (sidecar .json files next to them are tracked)
+models/*.onnx
+engines/*.engine
+engines/*.log
+runs/
+.pytest_cache/
