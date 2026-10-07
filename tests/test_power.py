@@ -17,6 +17,7 @@ def test_parse_orin_nano_rails_use_instantaneous_value():
     p = parse_line(ORIN_NANO)
     assert p["VDD_IN"] == 4542 and p["VDD_CPU_GPU_CV"] == 495 and p["VDD_SOC"] == 1286
     assert p["GR3D_FREQ_PCT"] == 37
+    assert p["temp_tj_c"] == 45.5 and p["temp_gpu_c"] == 44.2 and p["temp_soc1_c"] == 44.0
 
 
 def test_parse_agx_orin_rails():
@@ -32,9 +33,10 @@ def test_total_rail_per_board():
 
 def test_summarize_mean_in_watts():
     samples = [{"VDD_IN": 4000.0, "GR3D_FREQ_PCT": 50.0}, {"VDD_IN": 6000.0, "GR3D_FREQ_PCT": 100.0}, {"VDD_IN": 5000.0}]
+    samples[0]["temp_tj_c"], samples[2]["temp_tj_c"] = 61.0, 70.5
     s = summarize(samples, [0.0, 0.1, 0.2], "VDD_IN")
     assert s.mean_w == 5.0 and s.n_samples == 3 and s.min_w == 4.0 and s.max_w == 6.0
-    assert abs(s.duration_s - 0.2) < 1e-9 and s.gpu_load_pct == 75.0
+    assert abs(s.duration_s - 0.2) < 1e-9 and s.gpu_load_pct == 75.0 and s.tj_max_c == 70.5
 
 
 def test_summarize_unknown_rail_raises():

@@ -103,6 +103,10 @@ def main():
     print(f"  p50 {lat.p50_ms:.2f} ms  p95 {lat.p95_ms:.2f} ms  mean {lat.mean_ms:.2f} ms  {lat.fps:.1f} fps")
     if lat.gpu_p50_ms is not None:
         print(f"  execute only: p50 {lat.gpu_p50_ms:.2f} ms  p95 {lat.gpu_p95_ms:.2f} ms")
+    # a wide p95/p50 is the throttling signature; the row still lands, the decision to rerun is yours
+    if lat.p95_ms / lat.p50_ms > 1.3:
+        tj = power_meta.get("tegrastats", {}).get("tj_max_c")
+        print(f"warning: p95/p50 = {lat.p95_ms / lat.p50_ms:.2f}; thermal throttling? tj max {tj} C. let the board cool and rerun")
 
     if args.external_meter_w is not None:
         power = {"mean": args.external_meter_w, "source": "external_meter"}

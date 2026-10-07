@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 # "<RAIL> <now>mW/<avg>mW". The avg is since tegrastats started, not our window; ignore it.
 RAIL_RE = re.compile(r"\b([A-Z][A-Z0-9_]*)\s+(\d+)mW/(\d+)mW")
 GR3D_RE = re.compile(r"GR3D_FREQ\s+(\d+)%")
+TEMP_RE = re.compile(r"\b(cpu|gpu|tj|soc\d)@([\d.]+)C")
 
 # module input rail per board: Orin Nano/NX, AGX Orin, Xavier NX. None of these is wall draw.
 TOTAL_RAILS = ("VDD_IN", "VIN_SYS_5V0", "POM_5V_IN")
@@ -18,6 +19,8 @@ def parse_line(line):
     gr3d = GR3D_RE.search(line)
     if gr3d:
         out["GR3D_FREQ_PCT"] = float(gr3d.group(1))
+    for m in TEMP_RE.finditer(line):
+        out[f"temp_{m.group(1)}_c"] = float(m.group(2))
     return out
 
 
@@ -35,6 +38,7 @@ class PowerSummary:
     min_w: float
     max_w: float
     gpu_load_pct: float | None = None
+    tj_max_c: float | None = None
 
 
 def summarize(samples, times, rail):
@@ -43,8 +47,9 @@ def summarize(samples, times, rail):
         seen = sorted(set().union(*samples)) if samples else []
         raise ValueError(f"rail {rail!r} not in tegrastats output; saw {seen}")
     gpu = [s["GR3D_FREQ_PCT"] for s in samples if "GR3D_FREQ_PCT" in s]
+    tj = [s["temp_tj_c"] for s in samples if "temp_tj_c" in s]
     duration = times[-1] - times[0] if times and len(times) > 1 else 0.0
-    return PowerSummary(rail, sum(mw) / len(mw) / 1000, len(mw), duration, min(mw) / 1000, max(mw) / 1000, sum(gpu) / len(gpu) if gpu else None)
+    return PowerSummary(rail, sum(mw) / len(mw) / 1000, len(mw), duration, min(mw) / 1000, max(mw) / 1000, sum(gpu) / len(gpu) if gpu else None, max(tj) if tj else None)
 
 
 @dataclass
