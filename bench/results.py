@@ -93,14 +93,21 @@ def report(data):
     if not runs:
         return "_no runs yet_"
     lines = [
-        "| run | board | JetPack / TRT | model | res | precision | calib | nvpmodel | clocks | p50 ms | p95 ms | FPS | mAP50-95 | power W |",
-        "|" + "---|" * 14,
+        "| run | board | JetPack / TRT | model | res | precision | calib | nvpmodel | clocks | p50 ms | p95 ms | exec p50 ms | FPS | mAP50-95 | power W |",
+        "|" + "---|" * 15,
     ]
     for r in runs:
-        calib = f"{r['calib_imgs']} img, bs {r['calib_batch_size']}, {r['calib_scheme']}" if r["precision"] == "int8" else "-"
+        meta = r.get("meta", {})
+        calib = "-"
+        if r["precision"] == "int8":
+            calib = f"{r['calib_imgs']} {meta.get('calib_split', '')} img, bs {r['calib_batch_size']}, {r['calib_scheme']}".replace("  ", " ")
+            if meta.get("pin_fp16"):
+                calib += f", fp16: {','.join(meta['pin_fp16'])}"
+        gpu = meta.get("latency", {}).get("gpu_p50_ms")
+        gpu = f"{gpu:.2f}" if gpu is not None else "-"
         lines.append(
             f"| {r['run_id']} | {r['board']} | {r['jetpack']} / {r['tensorrt']} | {r['model']} | {r['input_res']} | {r['precision']} | {calib} "
-            f"| {r['nvpmodel_mode']} | {'on' if r['jetson_clocks'] else 'off'} | {r['latency_ms']['p50']:.2f} | {r['latency_ms']['p95']:.2f} "
+            f"| {r['nvpmodel_mode']} | {'on' if r['jetson_clocks'] else 'off'} | {r['latency_ms']['p50']:.2f} | {r['latency_ms']['p95']:.2f} | {gpu} "
             f"| {r['fps']:.1f} | {r['map_50_95']:.3f} | {r['power_w']['mean']:.2f} ({r['power_w']['source']}) |"
         )
     return "\n".join(lines)

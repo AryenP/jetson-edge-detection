@@ -80,6 +80,8 @@ def main():
     def step():
         be.infer(x)
 
+    gpu_ms = (lambda: be.gpu_ms) if be.name == "tensorrt" else None
+
     print(f"latency: {args.warmup} warm-up + {args.iters} timed")
     sample_power = not args.no_power and Tegrastats.available()
     if not args.no_power and not sample_power:
@@ -88,7 +90,7 @@ def main():
     tegra_w = None
     if sample_power:
         with Tegrastats() as ts:
-            lat = measure(step, args.warmup, args.iters)
+            lat = measure(step, args.warmup, args.iters, gpu_ms)
         try:
             ps = ts.summary(args.power_rail)
             power_meta = {"tegrastats": ps.__dict__}
@@ -97,8 +99,10 @@ def main():
         except ValueError as e:
             print(f"warning: {e}")
     else:
-        lat = measure(step, args.warmup, args.iters)
+        lat = measure(step, args.warmup, args.iters, gpu_ms)
     print(f"  p50 {lat.p50_ms:.2f} ms  p95 {lat.p95_ms:.2f} ms  mean {lat.mean_ms:.2f} ms  {lat.fps:.1f} fps")
+    if lat.gpu_p50_ms is not None:
+        print(f"  execute only: p50 {lat.gpu_p50_ms:.2f} ms  p95 {lat.gpu_p95_ms:.2f} ms")
 
     if args.external_meter_w is not None:
         power = {"mean": args.external_meter_w, "source": "external_meter"}
@@ -138,6 +142,8 @@ def main():
             "engine_sha256": sidecar.get("engine_sha256"),
             "onnx_sha256": sidecar.get("onnx_sha256"),
             "latency": lat.as_dict(),
+            "calib_split": sidecar.get("calib_split"),
+            "pin_fp16": sidecar.get("pin_fp16"),
             "accuracy": acc.__dict__ if acc else None,
             "l4t": env["l4t"],
             "cuda": env["cuda"],
