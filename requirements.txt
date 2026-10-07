@@ -1,0 +1,11 @@
+# Dev / CPU reference environment (laptop or CI). The Jetson gets tensorrt and
+# cuda from JetPack; see requirements-jetson.txt.
+numpy
+pillow
+onnxruntime
+pycocotools
+pytest
+# export only:
+ultralytics
+onnx
+onnxslim
