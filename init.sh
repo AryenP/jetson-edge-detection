@@ -22,19 +22,22 @@ case "${1:-help}" in
   calib)      # ./init.sh calib [val2017|train2017]: seeded 1000-image subset + manifest
     python3 -m scripts.prepare_calib --split "${2:-val2017}"
     ;;
-  engine)     # ./init.sh engine fp16 | int8 [val2017|train2017] [--pin-fp16 model.22,...]
-    prec="${2:?usage: ./init.sh engine fp16|int8 [split] [flags]}"
-    if [ "$prec" = int8 ]; then
-      python3 -m scripts.build_engine --onnx "$ONNX" --precision int8 --calib-split "${3:-val2017}" "${@:4}"
-    else
-      python3 -m scripts.build_engine --onnx "$ONNX" --precision fp16 "${@:3}"
-    fi
+  quantize)   # ./init.sh quantize [val2017|train2017]: explicit int8 via modelopt -> models/<stem>_int8qdq_<split>.onnx (laptop)
+    python3 -m scripts.quantize_onnx --onnx "$ONNX" --calib-split "${2:-val2017}" "${@:3}"
     ;;
-  bench)      # ./init.sh bench fp16 | int8 [val2017|train2017] [bench.run flags] -> results.json
-    prec="${2:?usage: ./init.sh bench fp16|int8 [split] [flags]}"
+  engine)     # ./init.sh engine fp16 | int8 [split] [--pin-fp16 model.22,...] | int8qdq [split]
+    prec="${2:?usage: ./init.sh engine fp16|int8|int8qdq [split] [flags]}"
+    case "$prec" in
+      int8)    python3 -m scripts.build_engine --onnx "$ONNX" --precision int8 --calib-split "${3:-val2017}" "${@:4}" ;;
+      int8qdq) python3 -m scripts.build_engine --onnx "${ONNX%.onnx}_int8qdq_${3:-val2017}.onnx" --precision int8 "${@:4}" ;;
+      *)       python3 -m scripts.build_engine --onnx "$ONNX" --precision fp16 "${@:3}" ;;
+    esac
+    ;;
+  bench)      # ./init.sh bench fp16 | int8 [split] | int8qdq [split] [bench.run flags] -> results.json
+    prec="${2:?usage: ./init.sh bench fp16|int8|int8qdq [split] [flags]}"
     stem="engines/$(basename "${ONNX%.onnx}")"
-    if [ "$prec" = int8 ]; then
-      python3 -m bench.run --engine "${stem}_int8_${3:-val2017}.engine" --out results.json "${@:4}"
+    if [ "$prec" = int8 ] || [ "$prec" = int8qdq ]; then
+      python3 -m bench.run --engine "${stem}_${prec}_${3:-val2017}.engine" --out results.json "${@:4}"
     else
       python3 -m bench.run --engine "${stem}_fp16.engine" --out results.json "${@:3}"
     fi
