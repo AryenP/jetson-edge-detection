@@ -27,7 +27,7 @@ def parse(onnx, logger):
     import tensorrt as trt
 
     builder = trt.Builder(logger)
-    network = builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
+    network = builder.create_network(0)  # explicit batch is the only mode in TensorRT 10; the old flag is ignored
     parser = trt.OnnxParser(network, logger)
     if not parser.parse(onnx.read_bytes()):
         raise RuntimeError("onnx parse failed:\n" + "\n".join(str(parser.get_error(i)) for i in range(parser.num_errors)))
@@ -35,7 +35,7 @@ def parse(onnx, logger):
 
 
 def pin_blocks(network, blocks, depth):
-    """Force every float layer in `blocks` to fp16. Returns the layer names pinned."""
+    """Force every float layer in `blocks` to compute in fp16. Returns the layer names pinned."""
     import tensorrt as trt
 
     pinned = []
@@ -43,12 +43,12 @@ def pin_blocks(network, blocks, depth):
         layer = network.get_layer(i)
         if block_of(layer.name, depth) not in blocks:
             continue
-        # shape/constant layers carry int32; forcing them to half fails the build
+        # shape/constant layers carry int32; a half precision constraint on them fails the build
         if layer.type in (trt.LayerType.CONSTANT, trt.LayerType.SHAPE) or any(layer.get_output(j).dtype != trt.float32 for j in range(layer.num_outputs)):
             continue
+        # precision only, not output type: the output may still be re-quantized to int8 for the
+        # next layer, so the pin isolates this block's own arithmetic rather than its neighbours'
         layer.precision = trt.DataType.HALF
-        for j in range(layer.num_outputs):
-            layer.set_output_type(j, trt.DataType.HALF)
         pinned.append(layer.name)
     return pinned
 
