@@ -5,6 +5,7 @@ pillow
 onnxruntime
 pycocotools
 pytest
+matplotlib
 # export only:
 ultralytics
 onnx
