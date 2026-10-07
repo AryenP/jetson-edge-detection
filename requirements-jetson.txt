@@ -1,0 +1,10 @@
+# On the Jetson (JetPack 6.x). tensorrt, cuda and opencv come from the JetPack apt
+# packages; do not pip install tensorrt. pycuda needs nvcc on PATH:
+#   export PATH=/usr/local/cuda/bin:$PATH
+numpy
+pillow
+pycuda
+pycocotools
+pytest
+# only if exporting on the board (NVIDIA's torch wheel is needed, see docs/jetson-setup.md):
+# ultralytics
