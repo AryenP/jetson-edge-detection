@@ -62,8 +62,10 @@ JetPack, which is a separate download.
 ## 5. COCO val2017
 
 ```
-./init.sh coco all     # ~780 MB zip + annotations into datasets/coco/
-./init.sh calib        # seeded 1000-image subset -> calib/images + calib/manifest.json
+./init.sh coco all             # ~780 MB zip + annotations into datasets/coco/
+./init.sh calib                # seeded 1000-image subset -> calib/val2017/
+./init.sh coco 1000 train2017  # 1000 seeded train2017 files, not the 18 GB zip
+./init.sh calib train2017      # -> calib/train2017/
 ```
 
 The mAP run reads the full 5000-image set. `--accuracy-limit N` exists for
@@ -73,7 +75,8 @@ smoke tests only; a reported mAP must be on the full split.
 
 ```
 ./init.sh engine fp16
-./init.sh engine int8          # runs calibration on first build, caches to calib/*.cache
+./init.sh engine int8              # calibrates on val2017 on first build, caches to calib/val2017/
+./init.sh engine int8 train2017
 ```
 
 Engines are tied to the GPU and the TensorRT version; rebuild after any
@@ -86,6 +89,7 @@ Commit those sidecars; the engines themselves are gitignored.
 ```
 ./init.sh bench fp16
 ./init.sh bench int8
+./init.sh bench int8 train2017
 ./init.sh report
 ```
 
@@ -94,6 +98,17 @@ in the background, then runs the mAP evaluation and appends one validated row
 to `results.json`. With an external USB power meter in line, read its mean
 over the timed loop and pass `--external-meter-w <W>`; the row then records
 the meter as the reference and keeps the tegrastats figure in `meta`.
+
+## 8. Sensitivity sweep
+
+```
+./init.sh sens --limit 500                    # ~25 engine builds; resumable, hours on an Orin Nano
+./init.sh engine int8 val2017 --pin-fp16 model.22,model.21
+./init.sh bench int8 val2017 --engine engines/yolov8n_640_int8_val2017_fp16-model.22-model.21.engine
+```
+
+The ranking in `runs/sensitivity.json` comes from a 500-image subset and is
+not a reported number. Only the final mixed engine on the full split is.
 
 ## Known traps
 

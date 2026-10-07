@@ -13,22 +13,35 @@ histogram. Chosen over the legacy percentile calibrator because it is
 deprecated in TensorRT 10. *Open:* min-max on the detection head only, if
 entropy clips the box regression range.
 
-## Calibration set: 1000 COCO val2017 images, seed 0
+## Calibration set: 1000 images, seed 0, from val2017 and from train2017
 
-The same split the mAP is measured on. That leaks nothing (calibration sees
-no labels) but it does mean the calibration distribution matches the test
-distribution exactly, which flatters INT8. *Open:* repeat with 1000 train2017
-images and report both.
+Calibrating on val2017 leaks no labels, but the calibration distribution then
+matches the test distribution exactly, which flatters INT8. So both: one
+engine calibrated on 1000 val2017 images, one on 1000 train2017 images,
+same seed, both benchmarked on the full val2017 split. The gap between them
+is the honest estimate of how much the val2017 calibration flatters.
+Rejected: val2017 only (cheaper, but the flattering is unmeasured).
 
 ## Quantisation scheme recorded as `mixed`
 
 TensorRT implicit quantisation gives per-tensor activation scales from the
 cache and per-channel symmetric weight scales from the builder. There is no
 knob to make activations per-channel. "Which layers lose the most to
-quantisation" therefore has to be answered by per-layer precision
-sensitivity (leave layer N in fp16, measure mAP), not by switching scale
-granularity. *Open:* whether that sweep uses `ILayer.precision` pins or
-explicit Q/DQ via ModelOpt.
+quantisation" is therefore answered by per-block precision sensitivity, not
+by switching scale granularity.
+
+## Sensitivity sweep: `ILayer.precision` pins, one block at a time
+
+`scripts/sensitivity.py` builds one int8 engine per `model.N` block with that
+block forced to fp16 (`OBEY_PRECISION_CONSTRAINTS`, so a pin the builder
+cannot honour fails loudly instead of silently running int8), evaluates
+each on the same 500-image subset, and ranks blocks by mAP recovered. The
+blocks that recover the most go into the final mixed engine via
+`build_engine --pin-fp16`, which is then benchmarked on the full split.
+Rejected for now: explicit quantisation with Q/DQ nodes through NVIDIA
+ModelOpt. It gives per-layer control over both scales and precision and is
+the stronger answer, but it is a second toolchain and a week of its own.
+Named as future work, not skipped silently.
 
 ## INT8 engines keep the FP16 flag
 
@@ -36,13 +49,16 @@ Layers TensorRT refuses to run in int8 fall back to fp16 instead of fp32.
 Matches how DeepStream-Yolo and trtexec `--int8 --fp16` build. Cost: the
 "INT8" engine is really int8-with-fp16-fallback and the README has to say so.
 
-## Latency window: H2D + execute + D2H + sync
+## Latency: both the copy-inclusive span and execute-only
 
-Pure GPU compute time (CUDA events around execute only) is what trtexec
-reports and what the published numbers use. The copies are included here
-because an application pays them, and on a unified-memory board they are
-small enough to leave in. *Open:* report trtexec's GPU-compute-only figure
-alongside, so the two are comparable.
+`latency_ms` in the row spans host-to-device copy, execute, device-to-host
+copy and a sync, because that is what an application pays per frame. CUDA
+events around the execute call alone give the figure trtexec reports and
+the published numbers use; it lives in `meta.latency.gpu_*` and the report
+table shows its p50 next to the inclusive one. Rejected: picking one. The
+inclusive number is the honest one, the execute-only number is the
+comparable one, and the difference is itself a measurement of copy cost on
+a unified-memory board.
 
 ## fps = 1000 / mean latency
 

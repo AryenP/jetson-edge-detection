@@ -13,7 +13,8 @@ every number.
 | ONNX export, pre/post-processing, COCO eval, results schema | done, checked against ultralytics on CPU |
 | TensorRT FP16 / INT8 build, entropy calibration, engine runner | written, not yet run (no board) |
 | FP16 baseline numbers | not measured |
-| INT8 numbers and per-layer sensitivity | not measured |
+| INT8 numbers, val2017 and train2017 calibration | not measured |
+| Per-block fp16-pin sensitivity, mixed engine | not measured |
 | Power at each nvpmodel mode | not measured |
 
 Hardware has not arrived. There are no performance numbers in this repo yet.
@@ -48,9 +49,15 @@ _no runs yet_
 # on the board (docs/jetson-setup.md)
 ./init.sh env                  # JetPack, TensorRT, CUDA, nvpmodel mode
 ./init.sh coco all             # COCO val2017 + annotations
-./init.sh calib                # seeded 1000-image calibration subset -> calib/manifest.json
-./init.sh engine fp16          # or int8; writes engines/*.engine.json
-./init.sh bench fp16           # or int8; appends one validated row to results.json
+./init.sh calib                # seeded 1000-image subset -> calib/val2017/manifest.json
+./init.sh coco 1000 train2017  # and the same from train2017
+./init.sh calib train2017
+./init.sh engine fp16          # writes engines/*.engine + .engine.json sidecar
+./init.sh engine int8          # calibrates on val2017; `int8 train2017` for the other
+./init.sh bench fp16           # appends one validated row to results.json
+./init.sh bench int8
+./init.sh sens --limit 500     # per-block sensitivity ranking -> runs/sensitivity.json
+./init.sh engine int8 val2017 --pin-fp16 model.22   # then bench it
 ./init.sh report
 ```
 
@@ -62,16 +69,22 @@ is rejected before it is written.
 
 - Latency is per frame at batch 1 and spans host-to-device copy, execute,
   device-to-host copy and a stream sync. Pre- and post-processing are outside
-  it. 50 warm-up iterations are discarded, 500 are timed. fps is 1000 / mean
-  latency, derived, not measured separately.
+  it. Execute-only time from CUDA events, the figure trtexec reports, is
+  recorded alongside. 50 warm-up iterations are discarded, 500 are timed. fps
+  is 1000 / mean latency, derived, not measured separately.
 - Power is the mean of tegrastats samples at 100 ms over the timed loop only,
   on the module input rail (`VDD_IN` on Orin Nano). tegrastats is approximate
   and excludes the carrier board. Where a USB meter is in line both are
   recorded and the meter is the reference (`power_w.source`).
-- INT8 calibration uses 1000 COCO val2017 images picked with a fixed seed;
-  the file list and its hash sit in `calib/manifest.json` and in the engine
-  sidecar. The cache comes from TensorRT's `IInt8EntropyCalibrator2` and is
-  the file `trtexec --calib` reads.
+- INT8 calibration uses 1000 images picked with a fixed seed, once from
+  val2017 and once from train2017; each file list and its hash sit in
+  `calib/<split>/manifest.json` and in the engine sidecar. The cache comes
+  from TensorRT's `IInt8EntropyCalibrator2` and is the file `trtexec --calib`
+  reads. INT8 engines keep the FP16 flag, so layers TensorRT will not run in
+  int8 fall back to fp16.
+- Per-block sensitivity (`./init.sh sens`) pins one `model.N` block to fp16
+  at a time and ranks blocks by mAP recovered on a 500-image subset. Only
+  the final mixed engine, benchmarked on the full split, is a reported number.
 - mAP is COCO val2017, all 5000 images, same letterbox and NMS at every
   precision (conf 0.001, IoU 0.7, max 300 detections, the `yolo val` defaults).
 
@@ -79,7 +92,7 @@ is rejected before it is written.
 
 ```
 bench/        preprocess, postprocess, backends, latency, power, accuracy, env, results, run
-scripts/      export_onnx, build_engine, calibrate, prepare_calib, fetch_coco
+scripts/      export_onnx, build_engine, calibrate, sensitivity, prepare_calib, fetch_coco
 tests/        CPU-only unit tests, plus an ONNX smoke test when an export is present
 docs/         jetson-setup.md
 experiments/  dead ends, one line each on why
