@@ -55,4 +55,9 @@ def entropy_calibrator(manifest, images_dir, cache, batch_size, imgsz):
             cache.write_bytes(data)
             print(f"  wrote {cache} ({len(data)} bytes)")
 
+        def free(self):
+            # the builder keeps no reference after serialization; without this a 25-engine
+            # sweep leaks a batch buffer per build, ~1 GB on an 8 GB board
+            self.dev.free()
+
     return Calibrator()

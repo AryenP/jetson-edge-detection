@@ -53,22 +53,25 @@ def pin_blocks(network, blocks, depth):
     return pinned
 
 
-def build(onnx, out, precision, workspace_mb, imgsz, calib=None, pin_fp16=(), pin_depth=1, log=print):
+def build(onnx, out, precision, workspace_mb, imgsz, calib=None, pin_fp16=(), pin_depth=1, quiet=False):
     import tensorrt as trt
 
-    logger = trt.Logger(trt.Logger.INFO)
+    log = (lambda *_: None) if quiet else print
+    logger = trt.Logger(trt.Logger.WARNING if quiet else trt.Logger.INFO)
     builder, network = parse(onnx, logger)
     config = builder.create_builder_config()
     config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, workspace_mb << 20)
     config.set_flag(trt.BuilderFlag.FP16)
     calib_info = {"calib_imgs": None, "calib_batch_size": None, "calib_scheme": None}
     pinned = []
+    calibrator = None
     if precision == "int8":
         from .calibrate import entropy_calibrator, load_manifest
 
         # FP16 stays on so layers TensorRT won't run in int8 fall back to fp16 rather than fp32
         config.set_flag(trt.BuilderFlag.INT8)
-        config.int8_calibrator = entropy_calibrator(calib["manifest"], calib["images"], calib["cache"], calib["batch"], imgsz)
+        calibrator = entropy_calibrator(calib["manifest"], calib["images"], calib["cache"], calib["batch"], imgsz)
+        config.int8_calibrator = calibrator
         m = load_manifest(calib["manifest"])
         calib_info = {
             "calib_imgs": (m["n"] // calib["batch"]) * calib["batch"],
@@ -89,9 +92,11 @@ def build(onnx, out, precision, workspace_mb, imgsz, calib=None, pin_fp16=(), pi
     log(f"building {precision} from {onnx}")
     t0 = time.perf_counter()
     serialized = builder.build_serialized_network(network, config)
+    build_s = time.perf_counter() - t0
+    if calibrator is not None:
+        calibrator.free()
     if serialized is None:
         raise RuntimeError("build failed, see log above")
-    build_s = time.perf_counter() - t0
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(bytes(serialized))
 
