@@ -1,0 +1,112 @@
+import argparse
+import json
+from pathlib import Path
+
+PRECISIONS = ("fp16", "int8")
+CALIB_SCHEMES = ("per-tensor", "per-channel", "mixed")
+POWER_SOURCES = ("tegrastats", "external_meter")
+
+SCHEMA = {
+    "run_id": "string",
+    "timestamp": "iso8601",
+    "board": "string",
+    "jetpack": "string",
+    "tensorrt": "string",
+    "model": "string",
+    "input_res": "int",
+    "precision": "fp16 | int8",
+    "calib_imgs": "int | null",
+    "calib_batch_size": "int | null",
+    "calib_scheme": "per-tensor | per-channel | mixed | null",
+    "nvpmodel_mode": "string",
+    "jetson_clocks": "bool",
+    "n_warmup_discarded": "int",
+    "latency_ms": {"p50": "float", "p95": "float"},
+    "fps": "float",
+    "map_50_95": "float",
+    "power_w": {"mean": "float", "source": "tegrastats | external_meter"},
+}
+
+
+class SchemaError(ValueError):
+    pass
+
+
+def is_num(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def validate(row):
+    missing = [k for k in SCHEMA if k not in row]
+    if missing:
+        raise SchemaError(f"missing fields: {missing}")
+    unknown = [k for k in row if k not in SCHEMA and k != "meta"]
+    if unknown:
+        raise SchemaError(f"unknown fields: {unknown}; extras go under 'meta'")
+
+    def need(cond, msg):
+        if not cond:
+            raise SchemaError(msg)
+
+    for key in ("run_id", "timestamp", "board", "jetpack", "tensorrt", "model", "nvpmodel_mode"):
+        need(isinstance(row[key], str) and row[key], f"{key} must be a non-empty string")
+    need(isinstance(row["input_res"], int) and row["input_res"] > 0, "input_res must be a positive int")
+    need(row["precision"] in PRECISIONS, f"precision must be one of {PRECISIONS}")
+    for key in ("calib_imgs", "calib_batch_size"):
+        need(row[key] is None or (isinstance(row[key], int) and row[key] > 0), f"{key} must be a positive int or null")
+    need(row["calib_scheme"] is None or row["calib_scheme"] in CALIB_SCHEMES, f"calib_scheme must be one of {CALIB_SCHEMES} or null")
+    if row["precision"] == "int8":
+        need(row["calib_imgs"] is not None and row["calib_scheme"] is not None, "int8 rows must record calibration")
+    need(isinstance(row["jetson_clocks"], bool), "jetson_clocks must be a bool")
+    need(isinstance(row["n_warmup_discarded"], int) and row["n_warmup_discarded"] >= 0, "n_warmup_discarded must be an int >= 0")
+    lat = row["latency_ms"]
+    need(isinstance(lat, dict) and is_num(lat.get("p50")) and is_num(lat.get("p95")), "latency_ms needs numeric p50 and p95")
+    need(lat["p95"] >= lat["p50"] > 0, "latency p95 must be >= p50 > 0")
+    need(is_num(row["fps"]) and row["fps"] > 0, "fps must be positive")
+    need(is_num(row["map_50_95"]) and 0.0 <= row["map_50_95"] <= 1.0, "map_50_95 must be in [0, 1]")
+    pw = row["power_w"]
+    need(isinstance(pw, dict) and is_num(pw.get("mean")) and pw.get("source") in POWER_SOURCES, f"power_w needs numeric mean and source in {POWER_SOURCES}")
+    if "meta" in row:
+        need(isinstance(row["meta"], dict), "meta must be an object")
+
+
+def load(path):
+    p = Path(path)
+    data = json.loads(p.read_text()) if p.exists() else {}
+    data.setdefault("runs", [])
+    data["schema"] = SCHEMA
+    return data
+
+
+def append(path, row):
+    validate(row)
+    data = load(path)
+    if any(r.get("run_id") == row["run_id"] for r in data["runs"]):
+        raise SchemaError(f"run_id {row['run_id']!r} already in {path}")
+    data["runs"].append(row)
+    Path(path).write_text(json.dumps(data, indent=2) + "\n")
+
+
+def report(data):
+    # sort so fp16 and int8 of the same model/mode sit on adjacent rows
+    runs = sorted(data.get("runs", []), key=lambda r: (r["model"], r["input_res"], r["nvpmodel_mode"], r["precision"], r["timestamp"]))
+    if not runs:
+        return "_no runs yet_"
+    lines = [
+        "| run | board | JetPack / TRT | model | res | precision | calib | nvpmodel | clocks | p50 ms | p95 ms | FPS | mAP50-95 | power W |",
+        "|" + "---|" * 14,
+    ]
+    for r in runs:
+        calib = f"{r['calib_imgs']} img, bs {r['calib_batch_size']}, {r['calib_scheme']}" if r["precision"] == "int8" else "-"
+        lines.append(
+            f"| {r['run_id']} | {r['board']} | {r['jetpack']} / {r['tensorrt']} | {r['model']} | {r['input_res']} | {r['precision']} | {calib} "
+            f"| {r['nvpmodel_mode']} | {'on' if r['jetson_clocks'] else 'off'} | {r['latency_ms']['p50']:.2f} | {r['latency_ms']['p95']:.2f} "
+            f"| {r['fps']:.1f} | {r['map_50_95']:.3f} | {r['power_w']['mean']:.2f} ({r['power_w']['source']}) |"
+        )
+    return "\n".join(lines)
+
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--path", default="results.json")
+    print(report(load(ap.parse_args().path)))
