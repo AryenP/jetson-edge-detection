@@ -11,7 +11,7 @@ every number.
 | stage | state |
 |---|---|
 | ONNX export, pre/post-processing, COCO eval, results schema | done, checked against ultralytics on CPU |
-| TensorRT FP16 / INT8 build, entropy calibration, engine runner | written, not yet run (no board) |
+| TensorRT FP16 / INT8 build, entropy calibration, fp16 pins, engine runner | written, tested against an in-memory fake of tensorrt and pycuda, not yet run on hardware |
 | FP16 baseline numbers | not measured |
 | INT8 numbers, val2017 and train2017 calibration | not measured |
 | Per-block fp16-pin sensitivity, mixed engine | not measured |
@@ -95,7 +95,7 @@ is rejected before it is written.
 ```
 bench/        preprocess, postprocess, backends, latency, power, accuracy, env, results, run
 scripts/      export_onnx, build_engine, calibrate, sensitivity, prepare_calib, fetch_coco, plot
-tests/        CPU-only unit tests, plus an ONNX smoke test when an export is present
+tests/        CPU-only unit tests; fake_trt.py stands in for tensorrt and pycuda so the board paths run too
 docs/         jetson-setup.md
 experiments/  dead ends, one line each on why
 DECISIONS.md  choices, rejected alternatives, reversals
