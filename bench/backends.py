@@ -23,7 +23,11 @@ class OnnxRuntime:
 
 
 class TensorRT:
-    """TensorRT 10 (JetPack 6) engine runner. infer() spans H2D, execute, D2H and a sync."""
+    """TensorRT 10 (JetPack 6) engine runner.
+
+    infer() spans H2D, execute, D2H and a sync; gpu_ms holds the execute-only
+    time of the last call from CUDA events, the figure trtexec reports.
+    """
 
     name = "tensorrt"
 
@@ -40,6 +44,8 @@ class TensorRT:
             raise RuntimeError(f"cannot deserialize {path}: built on another TensorRT or GPU?")
         self.ctx = self.engine.create_execution_context()
         self.stream = cuda.Stream()
+        self.ev_start, self.ev_end = cuda.Event(), cuda.Event()
+        self.gpu_ms = None
         self.io = {}
         for i in range(self.engine.num_io_tensors):
             name = self.engine.get_tensor_name(i)
@@ -64,10 +70,13 @@ class TensorRT:
         host_out, dev_out, out_shape, _, _ = self.io[self.output_name]
         np.copyto(host_in, np.ascontiguousarray(x, dtype=dtype).ravel())
         self.cuda.memcpy_htod_async(dev_in, host_in, self.stream)
+        self.ev_start.record(self.stream)
         if not self.ctx.execute_async_v3(stream_handle=self.stream.handle):
             raise RuntimeError("execute_async_v3 failed")
+        self.ev_end.record(self.stream)
         self.cuda.memcpy_dtoh_async(host_out, dev_out, self.stream)
         self.stream.synchronize()
+        self.gpu_ms = self.ev_end.time_since(self.ev_start)
         return host_out.reshape(out_shape).astype(np.float32, copy=False)
 
     def close(self):

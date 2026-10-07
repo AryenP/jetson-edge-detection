@@ -60,12 +60,14 @@ def test_missing_field_rejected():
 def test_append_and_report(tmp_path):
     path = tmp_path / "results.json"
     results.append(path, GOOD)
-    int8 = {**copy.deepcopy(GOOD), "run_id": "r2", "precision": "int8", "calib_imgs": 1000, "calib_batch_size": 8, "calib_scheme": "mixed"}
+    int8 = {**copy.deepcopy(GOOD), "run_id": "r2", "precision": "int8", "calib_imgs": 1000, "calib_batch_size": 8, "calib_scheme": "mixed",
+            "meta": {"calib_split": "train2017", "pin_fp16": ["model.22"], "latency": {"gpu_p50_ms": 6.123}}}
     results.append(path, int8)
     data = json.loads(path.read_text())
     assert [r["run_id"] for r in data["runs"]] == [GOOD["run_id"], "r2"] and data["schema"] == results.SCHEMA
     with pytest.raises(results.SchemaError, match="already in"):
         results.append(path, GOOD)
     table = results.report(results.load(path))
-    assert table.count("\n") == 3 and "1000 img, bs 8, mixed" in table and "| fp16 |" in table
+    assert table.count("\n") == 3 and "1000 train2017 img, bs 8, mixed, fp16: model.22" in table and "| fp16 |" in table
+    assert "| 6.12 |" in table and "| - |" in table
     assert results.report({"runs": []}) == "_no runs yet_"

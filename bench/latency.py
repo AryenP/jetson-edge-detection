@@ -15,16 +15,20 @@ class LatencyStats:
     n_warmup: int
     fps: float
     wall_s: float
+    gpu_p50_ms: float | None = None
+    gpu_p95_ms: float | None = None
+    gpu_mean_ms: float | None = None
 
     def as_dict(self):
         return asdict(self)
 
 
-def summarize(samples_ms, n_warmup, wall_s=None):
+def summarize(samples_ms, n_warmup, wall_s=None, gpu_ms=None):
     arr = np.asarray(samples_ms, dtype=np.float64)
     if arr.size == 0:
         raise ValueError("no timed samples")
     mean = float(arr.mean())
+    gpu = np.asarray(gpu_ms, dtype=np.float64) if gpu_ms is not None else None
     # fps from the mean, not p50: frames finished per second of the loop is a throughput
     return LatencyStats(
         p50_ms=float(np.percentile(arr, 50)),
@@ -36,17 +40,26 @@ def summarize(samples_ms, n_warmup, wall_s=None):
         n_warmup=n_warmup,
         fps=1000.0 / mean,
         wall_s=float(wall_s if wall_s is not None else arr.sum() / 1000),
+        gpu_p50_ms=float(np.percentile(gpu, 50)) if gpu is not None else None,
+        gpu_p95_ms=float(np.percentile(gpu, 95)) if gpu is not None else None,
+        gpu_mean_ms=float(gpu.mean()) if gpu is not None else None,
     )
 
 
-def measure(step, n_warmup=50, n_iters=500):
-    """`step` must block until the output is on the host, or this times the launch."""
+def measure(step, n_warmup=50, n_iters=500, gpu_ms=None):
+    """`step` must block until the output is on the host, or this times the launch.
+
+    `gpu_ms`, if given, is called after each step for that step's execute-only time.
+    """
     for _ in range(n_warmup):
         step()
     samples = np.empty(n_iters)
+    gpu = np.empty(n_iters) if gpu_ms else None
     t_start = time.perf_counter()
     for i in range(n_iters):
         t0 = time.perf_counter()
         step()
         samples[i] = (time.perf_counter() - t0) * 1000
-    return summarize(samples, n_warmup, time.perf_counter() - t_start)
+        if gpu_ms:
+            gpu[i] = gpu_ms()
+    return summarize(samples, n_warmup, time.perf_counter() - t_start, gpu)
