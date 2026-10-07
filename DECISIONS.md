@@ -9,9 +9,14 @@ deleted.
 Chosen over `IInt8MinMaxCalibrator` because min-max clips to the observed
 range and a single outlier activation blows the scale for the whole tensor;
 entropy picks the threshold that minimises KL divergence to the fp32
-histogram. Chosen over the legacy percentile calibrator because it is
-deprecated in TensorRT 10. *Open:* min-max on the detection head only, if
-entropy clips the box regression range.
+histogram. Known cost: TensorRT 10.1 deprecated the whole implicit
+quantisation path, calibrators included, in favour of explicit Q/DQ
+quantisation. It still ships and works in the 10.3 that JetPack 6.2 carries,
+with a deprecation warning, and it is what every published Jetson YOLO INT8
+number was produced with, so it stays as the baseline method. That
+deprecation is the strongest argument for the ModelOpt follow-up below.
+*Open:* min-max on the detection head only, if entropy clips the box
+regression range.
 
 ## Calibration set: 1000 images, seed 0, from val2017 and from train2017
 
@@ -33,9 +38,13 @@ by switching scale granularity.
 ## Sensitivity sweep: `ILayer.precision` pins, one block at a time
 
 `scripts/sensitivity.py` builds one int8 engine per `model.N` block with that
-block forced to fp16 (`OBEY_PRECISION_CONSTRAINTS`, so a pin the builder
-cannot honour fails loudly instead of silently running int8), evaluates
-each on the same 500-image subset, and ranks blocks by mAP recovered. The
+block's layers forced to compute in fp16 (`OBEY_PRECISION_CONSTRAINTS`, so a
+pin the builder cannot honour fails loudly instead of silently running
+int8), evaluates each on the same 500-image subset, and ranks blocks by mAP
+recovered. Only `ILayer.precision` is set, not the output type: the block's
+outputs may still be re-quantised to int8 for the next block, so each
+measurement isolates one block's arithmetic rather than also changing what
+its neighbours receive. The
 blocks that recover the most go into the final mixed engine via
 `build_engine --pin-fp16`, which is then benchmarked on the full split.
 Rejected for now: explicit quantisation with Q/DQ nodes through NVIDIA
