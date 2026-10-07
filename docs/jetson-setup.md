@@ -69,7 +69,7 @@ JetPack, which is a separate download.
 
 ```
 ./init.sh coco all             # ~780 MB zip + annotations into datasets/coco/
-./init.sh calib                # seeded 1000-image subset -> calib/val2017/
+./init.sh calib                # symlinks the committed calib/val2017/manifest.json set
 ./init.sh coco 1000 train2017  # 1000 seeded train2017 files, not the 18 GB zip
 ./init.sh calib train2017      # -> calib/train2017/
 ```

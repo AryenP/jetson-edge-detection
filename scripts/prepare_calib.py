@@ -40,18 +40,23 @@ if __name__ == "__main__":
 
     ann = Path(args.coco) / "annotations" / f"instances_{args.split}.json"
     src = Path(args.coco) / args.split
+    # sample from the annotation file, not from whatever is on disk, so the manifest is a
+    # property of the dataset and seed and comes out identical on every machine
     names = [im["file_name"] for im in json.loads(ann.read_text())["images"]]
-    present = [n for n in names if (src / n).exists()]
-    if len(present) < args.n:
-        print(f"warning: only {len(present)} of {len(names)} {args.split} images under {src}")
-    chosen = sample_files(present, args.n, args.seed)
+    chosen = sample_files(names, args.n, args.seed)
     out_dir = Path("calib") / args.split / "images"
     out_dir.mkdir(parents=True, exist_ok=True)
+    missing = 0
     for name in chosen:
         dst = out_dir / name
         if dst.is_symlink() or dst.exists():
             dst.unlink()
-        os.symlink((src / name).resolve(), dst)
+        if (src / name).exists():
+            os.symlink((src / name).resolve(), dst)
+        else:
+            missing += 1
     manifest = out_dir.parent / "manifest.json"
-    m = write_manifest(manifest, chosen, str(src), args.seed, args.imgsz)
+    m = write_manifest(manifest, chosen, f"instances_{args.split}.json", args.seed, args.imgsz)
     print(f"{m['n']} images -> {out_dir}; manifest {manifest} ({m['files_sha256'][:12]})")
+    if missing:
+        print(f"warning: {missing} of {m['n']} images not under {src}; fetch them before calibrating")
