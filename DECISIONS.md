@@ -89,6 +89,26 @@ The calibrator is a Python class, so the cache has to come from a Python
 build. Once the cache exists trtexec can rebuild from it, and the builder
 prints the equivalent trtexec line for that reason.
 
+## Alternative platform: Raspberry Pi 5 with the Hailo-8 AI HAT+ (open)
+
+The MAE/ECE 148 course moved its fleet from Jetsons to the Pi 5 with the
+26 TOPS Hailo-8 HAT, and a loan of one is more likely than a loan of a
+Jetson. The measurement rules transfer unchanged: same ONNX, same letterbox,
+same NMS thresholds, watts measured at the plug. What does not transfer:
+Hailo runs INT8 only, so there is no FP16 baseline on that side and the
+comparison is TensorRT INT8 against Hailo INT8. Its compiler (Dataflow
+Compiler) is x86 Linux only, the same problem as SDK Manager on a Mac, but
+Hailo's model zoo ships a pre-compiled yolov8n HEF (zoo v2.19, Hailo-8) with
+float mAP 37.0, hardware mAP 36.4 and 1036 FPS at batch 1 on an x86 host
+over PCIe Gen3 x4. The Pi 5 exposes one Gen3 lane, so the on-Pi number will
+be lower; measuring that gap is the point. Power is the whole board at the
+USB-C 5 V input with an inline USB-C meter; there is no tegrastats
+equivalent, and community figures put the HAT itself at up to ~4.5 W under
+load. Unverified: whether the zoo HEF runs NMS on-chip, which would bypass
+`bench/postprocess.py` and break the identical-post-processing rule.
+Decision: a fourth-week column if a kit is lent, never the primary target.
+The INT8 sensitivity work is TensorRT-specific and is the headline.
+
 ## Reversals
 
 None yet. The first measured number that contradicts a choice above goes here.
