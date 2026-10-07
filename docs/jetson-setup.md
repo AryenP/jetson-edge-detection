@@ -23,20 +23,25 @@ stores them in every results row.
 Numbers are meaningless without these two settings, which is why both are
 schema fields.
 
-| nvpmodel mode | Orin Nano 8GB | note |
-|---|---|---|
-| 0 | 15W | default on JetPack 6.0/6.1 |
-| 1 | 7W | |
-| 2 | 25W (MAXN SUPER) | JetPack 6.2 "Super" mode, higher GPU/memory clocks |
+JetPack 6.2 on the Orin Nano 8GB offers 15W, 25W and MAXN SUPER (uncapped;
+throttles when the module exceeds its thermal budget). The 7W mode belongs
+to the pre-6.2 configs. Mode ids are not fixed across JetPack versions, so
+read them off the board rather than a table:
 
 ```
-sudo nvpmodel -q            # current mode
-sudo nvpmodel -m 0          # set 15W
-sudo jetson_clocks          # pin clocks to max for the current mode (until reboot)
-sudo jetson_clocks --show   # verify
+sudo nvpmodel -q                      # current mode name and id
+grep -E "POWER_MODEL|NAME" /etc/nvpmodel.conf
+sudo nvpmodel -m <id>
+sudo jetson_clocks                    # pin clocks to max for the current mode (until reboot)
+sudo jetson_clocks --show             # verify
 ```
 
-`bench.run` detects `jetson_clocks` by checking whether the GPU devfreq
+MAXN SUPER under sustained load is a thermal experiment, not a power mode.
+Report 15W and 25W as the primary rows and MAXN SUPER with its p95/p50 ratio
+and the temperature from tegrastats.
+
+`bench.run` records the mode string `nvpmodel -q` prints, name and id. It
+detects `jetson_clocks` by checking whether the GPU devfreq
 min_freq equals max_freq; override with `--jetson-clocks yes|no` if the probe
 disagrees with what you did. Run the FP16 and INT8 benchmarks back to back
 under the same mode, and repeat the whole set per mode you care about.
@@ -99,7 +104,18 @@ to `results.json`. With an external USB power meter in line, read its mean
 over the timed loop and pass `--external-meter-w <W>`; the row then records
 the meter as the reference and keeps the tegrastats figure in `meta`.
 
-## 8. Sensitivity sweep
+## 8. Model and power-mode sweep
+
+```
+for m in yolov8n yolov8s yolov8m yolov8l; do ONNX=models/${m}_640.onnx ./init.sh engine fp16; done
+./init.sh sweep "0 1" "yolov8n yolov8s yolov8m yolov8l"   # mode ids from nvpmodel -q
+```
+
+`sweep` sets each mode, re-applies `jetson_clocks`, and benches every listed
+model's fp16 and int8 engines. Engines are built once per model; TensorRT
+engines do not depend on the power mode.
+
+## 9. Sensitivity sweep
 
 ```
 ./init.sh sens --limit 500                    # ~25 engine builds; resumable, hours on an Orin Nano
