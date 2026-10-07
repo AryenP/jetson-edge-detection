@@ -13,3 +13,4 @@ engines/**/*.engine
 engines/*.log
 runs/
 .pytest_cache/
+docs/plots/
