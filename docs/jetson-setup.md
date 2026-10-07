@@ -16,7 +16,8 @@ sudo apt update && sudo apt install -y nvidia-jetpack python3-pip python3-venv
 ```
 
 Record what `./init.sh env` prints; `bench.run` reads the same probes and
-stores them in every results row.
+stores them in every results row. `pycuda` and `tegrastats` must both read
+true before a benchmark means anything.
 
 ## 2. Power mode and clocks
 

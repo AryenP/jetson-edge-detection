@@ -83,6 +83,14 @@ def jetson_clocks_on():
     return None
 
 
+def importable(mod):
+    try:
+        __import__(mod)
+        return True
+    except ImportError:
+        return False
+
+
 def collect():
     return {
         "board": read("/proc/device-tree/model") or UNKNOWN,
@@ -92,6 +100,8 @@ def collect():
         "cuda": cuda_version(),
         "nvpmodel_mode": nvpmodel_mode(),
         "jetson_clocks": jetson_clocks_on(),
+        "pycuda": importable("pycuda.driver"),
+        "tegrastats": shutil.which("tegrastats") is not None,
         "python": platform.python_version(),
         "hostname": platform.node(),
         "kernel": platform.release(),
