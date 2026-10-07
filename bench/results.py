@@ -113,7 +113,51 @@ def report(data):
     return "\n".join(lines)
 
 
+def pairs(data):
+    """(fp16 row, int8 row) for every model / res / mode that has both, latest run of each."""
+    latest = {}
+    for r in data.get("runs", []):
+        key = (r["model"], r["input_res"], r["nvpmodel_mode"], r["precision"], r.get("meta", {}).get("calib_split"), tuple(r.get("meta", {}).get("pin_fp16") or ()))
+        if key not in latest or r["timestamp"] > latest[key]["timestamp"]:
+            latest[key] = r
+    out = []
+    for key, int8 in latest.items():
+        if int8["precision"] != "int8":
+            continue
+        fp16 = latest.get((key[0], key[1], key[2], "fp16", None, ()))
+        if fp16:
+            out.append((fp16, int8))
+    return out
+
+
+def tradeoffs(data):
+    """What INT8 buys and costs against the FP16 row from the same model and power mode."""
+    rows = pairs(data)
+    if not rows:
+        return "_no fp16/int8 pair yet_"
+    lines = [
+        "| model | res | nvpmodel | int8 calib | speedup (p50) | speedup (exec) | mAP50-95 fp16 -> int8 | power W fp16 -> int8 |",
+        "|" + "---|" * 8,
+    ]
+    for fp16, int8 in rows:
+        m = int8.get("meta", {})
+        calib = f"{m.get('calib_split', '?')}" + (f", fp16: {','.join(m['pin_fp16'])}" if m.get("pin_fp16") else "")
+        g16, g8 = fp16.get("meta", {}).get("latency", {}).get("gpu_p50_ms"), m.get("latency", {}).get("gpu_p50_ms")
+        exec_speedup = f"{g16 / g8:.2f}x" if g16 and g8 else "-"
+        dmap = int8["map_50_95"] - fp16["map_50_95"]
+        dpw = int8["power_w"]["mean"] - fp16["power_w"]["mean"]
+        pct = f" ({dpw / fp16['power_w']['mean'] * 100:+.1f}%)" if fp16["power_w"]["mean"] else ""
+        lines.append(
+            f"| {int8['model']} | {int8['input_res']} | {int8['nvpmodel_mode']} | {calib} | {fp16['latency_ms']['p50'] / int8['latency_ms']['p50']:.2f}x | {exec_speedup} "
+            f"| {fp16['map_50_95']:.4f} -> {int8['map_50_95']:.4f} ({dmap:+.4f}) | {fp16['power_w']['mean']:.2f} -> {int8['power_w']['mean']:.2f}{pct} |"
+        )
+    return "\n".join(lines)
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--path", default="results.json")
-    print(report(load(ap.parse_args().path)))
+    data = load(ap.parse_args().path)
+    print(report(data))
+    print()
+    print(tradeoffs(data))
