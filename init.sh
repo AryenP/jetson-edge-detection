@@ -42,6 +42,20 @@ case "${1:-help}" in
   sens)       # per-block fp16-pin sensitivity sweep; ranks blocks, reportable numbers come from bench
     python3 -m scripts.sensitivity --onnx "$ONNX" "${@:2}"
     ;;
+  sweep)      # ./init.sh sweep "<mode ids>" "<model stems>": bench fp16 + int8 of each model in each mode
+    modes="${2:?usage: ./init.sh sweep \"0 1\" \"yolov8n yolov8s\"}"
+    for mode in $modes; do
+      sudo nvpmodel -m "$mode" && sudo jetson_clocks
+      sleep 10   # let clocks and temperature settle before the first timed loop
+      for m in ${3:-yolov8n}; do
+        ONNX="models/${m}_640.onnx" "$0" bench fp16
+        ONNX="models/${m}_640.onnx" "$0" bench int8
+      done
+    done
+    ;;
+  plots)      # results.json -> docs/plots/*.png
+    python3 -m scripts.plot
+    ;;
   bench-cpu)  # pipeline dry run with onnxruntime on this machine; nothing is recorded
     python3 -m bench.run --engine "$ONNX" --no-power --iters 20 --warmup 5 --dry-run "${@:2}"
     ;;

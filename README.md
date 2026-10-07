@@ -58,7 +58,9 @@ _no runs yet_
 ./init.sh bench int8
 ./init.sh sens --limit 500     # per-block sensitivity ranking -> runs/sensitivity.json
 ./init.sh engine int8 val2017 --pin-fp16 model.22   # then bench it
-./init.sh report
+./init.sh sweep "0 1" "yolov8n yolov8s yolov8m yolov8l"  # every model in every power mode
+./init.sh report               # rows, then fp16 -> int8 speedup / mAP cost / power delta
+./init.sh plots                # docs/plots/latency_power.png, map_latency.png
 ```
 
 ## Measurement rules
@@ -92,7 +94,7 @@ is rejected before it is written.
 
 ```
 bench/        preprocess, postprocess, backends, latency, power, accuracy, env, results, run
-scripts/      export_onnx, build_engine, calibrate, sensitivity, prepare_calib, fetch_coco
+scripts/      export_onnx, build_engine, calibrate, sensitivity, prepare_calib, fetch_coco, plot
 tests/        CPU-only unit tests, plus an ONNX smoke test when an export is present
 docs/         jetson-setup.md
 experiments/  dead ends, one line each on why
