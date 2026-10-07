@@ -83,7 +83,12 @@ smoke tests only; a reported mAP must be on the full split.
 ./init.sh engine fp16
 ./init.sh engine int8              # calibrates on val2017 on first build, caches to calib/val2017/
 ./init.sh engine int8 train2017
+./init.sh engine int8qdq           # from models/yolov8n_640_int8qdq_val2017.onnx, made on the laptop
 ```
+
+The Q/DQ ONNX comes from `./init.sh quantize` on the laptop (ModelOpt,
+CPU, minutes); copy it and its `.onnx.json` sidecar over with the fp32
+export. The builder reads the sidecar and skips the calibrator.
 
 Engines are tied to the GPU and the TensorRT version; rebuild after any
 JetPack upgrade. Each build writes `engines/<name>.engine.json` with the ONNX

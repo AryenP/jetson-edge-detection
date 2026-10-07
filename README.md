@@ -24,7 +24,8 @@ Hardware has not arrived. There are no performance numbers in this repo yet.
 ```
 YOLOv8n (PyTorch) ─► ONNX, opset 17, 1x3x640x640
                        ├─► TensorRT FP16 engine
-                       └─► TensorRT INT8 engine ◄── IInt8EntropyCalibrator2 cache, 1000 COCO val2017 images
+                       ├─► TensorRT INT8 engine ◄── IInt8EntropyCalibrator2 cache, 1000 COCO images
+                       └─► ModelOpt Q/DQ ONNX ─► TensorRT INT8 engine (explicit, same 1000 images)
                                   │
                     latency p50/p95, fps ─┐
                     tegrastats @ 100 ms ──┼─► results.json (schema'd, one row per run)
@@ -52,10 +53,13 @@ _no runs yet_
 ./init.sh calib                # seeded 1000-image subset -> calib/val2017/manifest.json
 ./init.sh coco 1000 train2017  # and the same from train2017
 ./init.sh calib train2017
+./init.sh quantize             # on the laptop: explicit int8 Q/DQ onnx via ModelOpt, ~minutes on CPU
 ./init.sh engine fp16          # writes engines/*.engine + .engine.json sidecar
 ./init.sh engine int8          # calibrates on val2017; `int8 train2017` for the other
+./init.sh engine int8qdq       # builds from the Q/DQ onnx, no calibrator
 ./init.sh bench fp16           # appends one validated row to results.json
 ./init.sh bench int8
+./init.sh bench int8qdq
 ./init.sh sens --limit 500     # per-block sensitivity ranking -> runs/sensitivity.json
 ./init.sh engine int8 val2017 --pin-fp16 model.22   # then bench it
 ./init.sh sweep "0 1" "yolov8n yolov8s yolov8m yolov8l"  # every model in every power mode
