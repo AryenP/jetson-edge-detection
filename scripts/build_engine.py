@@ -23,6 +23,11 @@ def calib_paths(split, onnx_stem):
     return {"manifest": d / "manifest.json", "images": d / "images", "cache": d / f"{onnx_stem}_entropy2.cache"}
 
 
+def onnx_sidecar(onnx):
+    p = Path(onnx).with_suffix(".onnx.json")
+    return json.loads(p.read_text()) if p.exists() else {}
+
+
 def parse(onnx, logger):
     import tensorrt as trt
 
@@ -65,7 +70,15 @@ def build(onnx, out, precision, workspace_mb, imgsz, calib=None, pin_fp16=(), pi
     calib_info = {"calib_imgs": None, "calib_batch_size": None, "calib_scheme": None}
     pinned = []
     calibrator = None
-    if precision == "int8":
+    qdq = onnx_sidecar(onnx).get("qdq", False)
+    if precision == "int8" and qdq:
+        if pin_fp16:
+            raise ValueError("fp16 pins apply to the calibrator path; a Q/DQ graph fixes precision per tensor already")
+        # scales are in the graph; TensorRT ignores a calibrator once it sees Q/DQ nodes
+        config.set_flag(trt.BuilderFlag.INT8)
+        s = onnx_sidecar(onnx)
+        calib_info = {k: s.get(k) for k in ("calib_imgs", "calib_batch_size", "calib_scheme", "calib_split", "calib_method", "calib_manifest_sha256")}
+    elif precision == "int8":
         from .calibrate import entropy_calibrator, load_manifest
 
         # FP16 stays on so layers TensorRT won't run in int8 fall back to fp16 rather than fp32
@@ -79,6 +92,7 @@ def build(onnx, out, precision, workspace_mb, imgsz, calib=None, pin_fp16=(), pi
             # entropy cache = per-tensor activation scales; the builder quantizes weights per-channel
             "calib_scheme": "mixed",
             "calib_split": calib["split"],
+            "calib_method": "trt-entropy2",
             "calib_manifest_sha256": m["files_sha256"],
             "calib_seed": m["seed"],
             "calib_cache": str(calib["cache"]),
@@ -120,7 +134,9 @@ def build(onnx, out, precision, workspace_mb, imgsz, calib=None, pin_fp16=(), pi
     }
     out.with_suffix(".engine.json").write_text(json.dumps(sidecar, indent=2) + "\n")
     log(f"wrote {out} ({out.stat().st_size / 1e6:.1f} MB) in {build_s:.0f}s")
-    if precision == "int8" and not pin_fp16:
+    if precision == "int8" and qdq:
+        log(f"trtexec equivalent: trtexec --onnx={onnx} --int8 --fp16 --saveEngine={out}")
+    elif precision == "int8" and not pin_fp16:
         log(f"trtexec equivalent: trtexec --onnx={onnx} --int8 --fp16 --calib={calib['cache']} --saveEngine={out}")
     return sidecar
 
@@ -151,6 +167,9 @@ if __name__ == "__main__":
     if args.precision == "fp16":
         out = Path(args.out or f"engines/{onnx.stem}_fp16.engine")
         build(onnx, out, "fp16", args.workspace_mb, args.imgsz)
+    elif onnx_sidecar(onnx).get("qdq"):
+        # the quantized onnx stem already names the split, e.g. yolov8n_640_int8qdq_val2017
+        build(onnx, Path(args.out or f"engines/{onnx.stem}.engine"), "int8", args.workspace_mb, args.imgsz, pin_fp16=pins)
     else:
         suffix = f"_fp16-{'-'.join(pins)}" if pins else ""
         out = Path(args.out or f"engines/{onnx.stem}_int8_{args.calib_split}{suffix}.engine")

@@ -91,6 +91,18 @@ def test_fp16_build_has_no_calibration(fake_trt, tmp_path):
     assert side["calib_imgs"] is None and side["pin_fp16"] is None and fake_trt.Builder.built[-1]["flags"] == {"fp16"}
 
 
+def test_qdq_build_skips_the_calibrator_and_carries_its_sidecar(fake_trt, tmp_path):
+    onnx = tmp_path / "yolov8n_640_int8qdq_val2017.onnx"
+    onnx.write_bytes(b"onnx")
+    onnx.with_suffix(".onnx.json").write_text(json.dumps({"qdq": True, "calib_imgs": 1000, "calib_batch_size": 1000, "calib_scheme": "mixed", "calib_split": "val2017", "calib_method": "modelopt-entropy", "calib_manifest_sha256": "abc"}))
+    side = build(onnx, tmp_path / "e.engine", "int8", 256, 640, quiet=True)
+    b = fake_trt.Builder.built[-1]
+    assert b["flags"] == {"fp16", "int8"} and b["batches"] == 0
+    assert side["calib_imgs"] == 1000 and side["calib_method"] == "modelopt-entropy" and side["calib_split"] == "val2017"
+    with pytest.raises(ValueError, match="pins"):
+        build(onnx, tmp_path / "e.engine", "int8", 256, 640, pin_fp16=("model.22",), quiet=True)
+
+
 def test_bad_onnx_fails_the_parse(fake_trt, tmp_path):
     onnx = tmp_path / "m.onnx"
     onnx.write_bytes(b"bad")

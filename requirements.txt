@@ -10,3 +10,5 @@ matplotlib
 ultralytics
 onnx
 onnxslim
+# explicit int8 quantization only (laptop; pulls onnxruntime-gpu, which falls back to CPU):
+nvidia-modelopt[onnx]
