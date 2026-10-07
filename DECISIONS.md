@@ -47,10 +47,23 @@ measurement isolates one block's arithmetic rather than also changing what
 its neighbours receive. The
 blocks that recover the most go into the final mixed engine via
 `build_engine --pin-fp16`, which is then benchmarked on the full split.
-Rejected for now: explicit quantisation with Q/DQ nodes through NVIDIA
-ModelOpt. It gives per-layer control over both scales and precision and is
-the stronger answer, but it is a second toolchain and a week of its own.
-Named as future work, not skipped silently.
+
+## Explicit quantisation via ModelOpt: a third INT8 engine, not future work
+
+First plan: name NVIDIA ModelOpt as future work because it looked like a
+second toolchain and a week of its own. Tried it before the board arrived:
+`modelopt.onnx.quantization.quantize` runs on a laptop CPU, took 86 s on
+128 images for yolov8n, and produced a Q/DQ ONNX with 88 of 503 nodes
+quantised that onnxruntime runs unchanged. So it is one script
+(`scripts/quantize_onnx.py`) and a sidecar flag the engine builder reads,
+and it becomes the third INT8 variant: TensorRT calibrator on val2017,
+TensorRT calibrator on train2017, ModelOpt Q/DQ on val2017. It is also the
+only one of the three that is not deprecated. The scales sit in the graph
+per tensor, which is the per-layer inspectability the sensitivity sweep
+approximates from outside. Not transferable: the fp16 block pins, since a
+Q/DQ graph already fixes precision per tensor. ModelOpt converts the
+unquantised remainder to fp16 by default, which matches the
+int8-with-fp16-fallback decision above.
 
 ## INT8 engines keep the FP16 flag
 
@@ -104,8 +117,10 @@ over PCIe Gen3 x4. The Pi 5 exposes one Gen3 lane, so the on-Pi number will
 be lower; measuring that gap is the point. Power is the whole board at the
 USB-C 5 V input with an inline USB-C meter; there is no tegrastats
 equivalent, and community figures put the HAT itself at up to ~4.5 W under
-load. Unverified: whether the zoo HEF runs NMS on-chip, which would bypass
-`bench/postprocess.py` and break the identical-post-processing rule.
+load. The zoo HEF runs NMS on the device (`nms: true` in its network config,
+output shape 80x5x100), which bypasses `bench/postprocess.py` and breaks the
+identical-post-processing rule; a like-for-like row needs a HEF compiled
+without on-device NMS, which needs the x86 compiler.
 Decision: a fourth-week column if a kit is lent, never the primary target.
 The INT8 sensitivity work is TensorRT-specific and is the headline.
 
