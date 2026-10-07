@@ -9,8 +9,8 @@ from pathlib import Path
 from .prepare_calib import sample_files
 
 ANN_URL = "http://images.cocodataset.org/annotations/annotations_trainval2017.zip"
-VAL_URL = "http://images.cocodataset.org/zips/val2017.zip"
-IMG_URL = "http://images.cocodataset.org/val2017/{}"
+ZIP_URL = "http://images.cocodataset.org/zips/{}.zip"
+IMG_URL = "http://images.cocodataset.org/{}/{}"
 
 
 def download(url, dst):
@@ -21,8 +21,8 @@ def download(url, dst):
     part.replace(dst)
 
 
-def annotations(root):
-    ann = root / "annotations" / "instances_val2017.json"
+def annotations(root, split):
+    ann = root / "annotations" / f"instances_{split}.json"
     if ann.exists():
         return ann
     z = root / "annotations_trainval2017.zip"
@@ -30,25 +30,26 @@ def annotations(root):
         print(f"downloading {ANN_URL}")
         download(ANN_URL, z)
     with zipfile.ZipFile(z) as zf:
-        zf.extract("annotations/instances_val2017.json", root)
+        zf.extract(f"annotations/instances_{split}.json", root)
     return ann
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default="datasets/coco")
-    ap.add_argument("--images", default="0", help="'all' for the val2017 zip, or N seeded files for a smoke test")
+    ap.add_argument("--split", choices=("val2017", "train2017"), default="val2017")
+    ap.add_argument("--images", default="0", help="'all' for the split's zip (val 780 MB, train 18 GB), or N seeded files")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
     root = Path(args.root)
-    ann = annotations(root)
-    img_dir = root / "val2017"
+    ann = annotations(root, args.split)
+    img_dir = root / args.split
     if args.images == "all":
-        z = root / "val2017.zip"
+        z = root / f"{args.split}.zip"
         if not z.exists():
-            print(f"downloading {VAL_URL}")
-            download(VAL_URL, z)
+            print(f"downloading {ZIP_URL.format(args.split)}")
+            download(ZIP_URL.format(args.split), z)
         with zipfile.ZipFile(z) as zf:
             zf.extractall(root)
         print(f"extracted {img_dir}")
@@ -57,6 +58,6 @@ if __name__ == "__main__":
         todo = [n for n in sample_files(names, int(args.images), args.seed) if not (img_dir / n).exists()]
         print(f"fetching {len(todo)} images into {img_dir}")
         with ThreadPoolExecutor(8) as pool:
-            list(pool.map(lambda n: download(IMG_URL.format(n), img_dir / n), todo))
+            list(pool.map(lambda n: download(IMG_URL.format(args.split, n), img_dir / n), todo))
     else:
         print(f"annotations at {ann}")
