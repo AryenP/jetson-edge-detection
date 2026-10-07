@@ -62,7 +62,7 @@ def main():
         engine = engine_dir / f"{onnx.stem}_{key}.engine"
         t0 = time.perf_counter()
         try:
-            sidecar = build(onnx, engine, precision, args.workspace_mb, args.imgsz, calib, pins, args.pin_depth, log=lambda *_: None)
+            sidecar = build(onnx, engine, precision, args.workspace_mb, args.imgsz, calib, pins, args.pin_depth, quiet=True)
             rows[key] = {"map_50_95": eval_engine(engine, args.coco_ann, args.coco_images, args.imgsz, args.limit), "n_pinned": len(sidecar["pinned_layers"] or []), "seconds": round(time.perf_counter() - t0)}
         except RuntimeError as e:
             rows[key] = {"map_50_95": None, "error": str(e), "seconds": round(time.perf_counter() - t0)}
