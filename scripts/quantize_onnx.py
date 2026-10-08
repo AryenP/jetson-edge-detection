@@ -28,14 +28,22 @@ def calib_array(manifest, images_dir, n, imgsz):
     return np.concatenate([preprocess(Path(images_dir) / f, imgsz)[0] for f in files]).astype(np.float32)
 
 
-def quantize(onnx, out, x, method):
+def quantize(onnx, out, x, method, nodes_to_exclude=None):
     import modelopt
     import modelopt.onnx.quantization as moq
 
     # fp32 for the unquantized remainder, not modelopt's fp16 default: under onnxruntime on cpu the
     # fp16 remainder collapsed coco128 mAP from 0.44 to 0.13 while fp32 held 0.44 with identical Q/DQ
     # placement. tensorrt still runs those layers in fp16 because the builder sets the FP16 flag
-    moq.quantize(onnx_path=str(onnx), calibration_data={"images": x}, calibration_method=method, quantize_mode="int8", high_precision_dtype="fp32", output_path=str(out))
+    moq.quantize(
+        onnx_path=str(onnx),
+        calibration_data={"images": x},
+        calibration_method=method,
+        quantize_mode="int8",
+        high_precision_dtype="fp32",
+        nodes_to_exclude=nodes_to_exclude,
+        output_path=str(out),
+    )
     return modelopt.__version__
 
 

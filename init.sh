@@ -42,7 +42,7 @@ case "${1:-help}" in
       python3 -m bench.run --engine "${stem}_fp16.engine" --out results.json "${@:3}"
     fi
     ;;
-  sens)       # per-block fp16-pin sensitivity sweep; ranks blocks, reportable numbers come from bench
+  sens)       # per-block sensitivity sweep (--explicit runs it on a laptop via modelopt); ranks blocks only
     python3 -m scripts.sensitivity --onnx "$ONNX" "${@:2}"
     ;;
   sweep)      # ./init.sh sweep "<mode ids>" "<model stems>": bench fp16 + int8 of each model in each mode
