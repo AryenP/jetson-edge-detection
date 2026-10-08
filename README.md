@@ -12,6 +12,7 @@ every number.
 |---|---|
 | ONNX export, pre/post-processing, COCO eval, results schema | done, checked against ultralytics on CPU |
 | TensorRT FP16 / INT8 build, entropy calibration, fp16 pins, engine runner | written, tested against an in-memory fake of tensorrt and pycuda, not yet run on hardware |
+| Explicit INT8 via ModelOpt Q/DQ | done, checked on CPU against fp32 on coco128 (see DECISIONS) |
 | FP16 baseline numbers | not measured |
 | INT8 numbers, val2017 and train2017 calibration | not measured |
 | Per-block fp16-pin sensitivity, mixed engine | not measured |
