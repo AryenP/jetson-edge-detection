@@ -88,7 +88,15 @@ smoke tests only; a reported mAP must be on the full split.
 
 The Q/DQ ONNX comes from `./init.sh quantize` on the laptop (ModelOpt,
 CPU, minutes); copy it and its `.onnx.json` sidecar over with the fp32
-export. The builder reads the sidecar and skips the calibrator.
+export. The builder reads the sidecar and skips the calibrator. Check the
+graph's accuracy on the laptop first, against the fp32 export on the same
+images, before spending a build on it:
+
+```
+./init.sh coco 500                 # 500 seeded val2017 files on the laptop
+python3 -m bench.run --engine models/yolov8n_640.onnx --no-power --accuracy-limit 500 --dry-run
+python3 -m bench.run --engine models/yolov8n_640_int8qdq_val2017.onnx --no-power --accuracy-limit 500 --dry-run
+```
 
 Engines are tied to the GPU and the TensorRT version; rebuild after any
 JetPack upgrade. Each build writes `engines/<name>.engine.json` with the ONNX

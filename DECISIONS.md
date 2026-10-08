@@ -61,9 +61,28 @@ TensorRT calibrator on train2017, ModelOpt Q/DQ on val2017. It is also the
 only one of the three that is not deprecated. The scales sit in the graph
 per tensor, which is the per-layer inspectability the sensitivity sweep
 approximates from outside. Not transferable: the fp16 block pins, since a
-Q/DQ graph already fixes precision per tensor. ModelOpt converts the
-unquantised remainder to fp16 by default, which matches the
-int8-with-fp16-fallback decision above.
+Q/DQ graph already fixes precision per tensor.
+
+Checked on CPU before the board, scoring each Q/DQ variant with the
+project's own evaluator on coco128 (128 train images with labels, the only
+labelled COCO images reachable from the build machine; absolute mAP is
+inflated because the model trained on them, only the deltas mean anything):
+
+| variant, 128 calibration images | mAP50-95 |
+|---|---|
+| fp32 reference | 0.444 |
+| entropy, remainder fp32 | 0.441 |
+| entropy, remainder fp16 (ModelOpt default) | 0.130 |
+| entropy, Conv only quantised | 0.197 |
+| entropy, detection head excluded | 0.160 |
+| max, remainder fp16 | 0.021 |
+| max, head excluded | 0.024 |
+
+INT8 itself costs 0.003 here. The collapse came from the fp16 remainder as
+onnxruntime executes it on CPU, not from quantisation; excluding the head or
+the non-Conv ops did not rescue it because the fp16 remainder was still
+there. `max` calibration is unusable on this model whatever else is done,
+which is the evidence behind choosing entropy above.
 
 ## INT8 engines keep the FP16 flag
 
@@ -126,4 +145,12 @@ The INT8 sensitivity work is TensorRT-specific and is the headline.
 
 ## Reversals
 
-None yet. The first measured number that contradicts a choice above goes here.
+**Q/DQ remainder precision: fp16 to fp32.** The first version of
+`scripts/quantize_onnx.py` took ModelOpt's default and left the unquantised
+layers in fp16, on the reasoning that it matched the int8-with-fp16-fallback
+engine decision. The coco128 table above reversed it: 0.130 against 0.441
+with the only difference being that remainder dtype. The script now keeps
+the remainder in fp32. Nothing is given up on the board, because the engine
+builder sets the FP16 flag and TensorRT picks fp16 kernels for fp32 layers
+on its own; what is gained is a Q/DQ graph whose accuracy can be checked
+on a laptop before an engine is built from it.
