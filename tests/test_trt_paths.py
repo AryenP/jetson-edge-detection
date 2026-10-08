@@ -157,6 +157,6 @@ def test_sensitivity_sweep_is_resumable(fake_trt, tmp_path, monkeypatch, capsys)
     assert rows["int8_fp16-model.22"]["n_pinned"] == 3 and rows["int8"]["map_50_95"] == 0.0
     assert len(fake_trt.Builder.built) == 4
     table = capsys.readouterr().out
-    assert "| model.22 | 3 |" in table
+    assert "| model.22 | 0.0000 | +0.0000 |" in table
     sensitivity.main()
     assert len(fake_trt.Builder.built) == 4  # every row already present, nothing rebuilt
