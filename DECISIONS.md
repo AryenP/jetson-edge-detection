@@ -84,6 +84,22 @@ the non-Conv ops did not rescue it because the fp16 remainder was still
 there. `max` calibration is unusable on this model whatever else is done,
 which is the evidence behind choosing entropy above.
 
+A first pass of the explicit sweep on the same 128 images, three blocks
+only (`scripts/sensitivity.py --explicit`, fp32 remainder, entropy):
+
+| block kept float | mAP50-95 | vs all-int8 |
+|---|---|---|
+| none (all int8) | 0.4407 | |
+| model.22 (detection head) | 0.4444 | +0.0036 |
+| model.9 (SPPF) | 0.4377 | -0.0030 |
+| model.0 (stem) | 0.4326 | -0.0081 |
+
+Keeping the head float recovers the entire int8 gap; the other two sit
+inside the noise of a 128-image set. Too small a set to rank 23 blocks, and
+a different quantiser from the TensorRT calibrator, so this is a lead, not a
+finding. It does point the same way as the prior expectation that the DFL
+regression head is where int8 hurts.
+
 ## INT8 engines keep the FP16 flag
 
 Layers TensorRT refuses to run in int8 fall back to fp16 instead of fp32.
