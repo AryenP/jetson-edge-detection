@@ -140,6 +140,12 @@ engines do not depend on the power mode.
 The ranking in `runs/sensitivity.json` comes from a 500-image subset and is
 not a reported number. Only the final mixed engine on the full split is.
 
+The same sweep runs on a laptop without the board through the explicit path,
+`./init.sh sens --explicit`, which quantises with ModelOpt and excludes one
+block at a time instead of pinning it in the engine. Each variant takes a
+few minutes on CPU with the default 200 calibration images. The two rankings
+measure different quantisers, so agreement between them is itself a result.
+
 ## Known traps
 
 - `tegrastats` rail names differ by module (`VDD_IN` on Orin Nano/NX,
