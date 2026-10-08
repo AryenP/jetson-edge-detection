@@ -62,6 +62,7 @@ _no runs yet_
 ./init.sh bench int8
 ./init.sh bench int8qdq
 ./init.sh sens --limit 500     # per-block sensitivity ranking -> runs/sensitivity.json
+./init.sh sens --explicit      # same ranking on a laptop via modelopt exclusions, no board needed
 ./init.sh engine int8 val2017 --pin-fp16 model.22   # then bench it
 ./init.sh sweep "0 1" "yolov8n yolov8s yolov8m yolov8l"  # every model in every power mode
 ./init.sh report               # rows, then fp16 -> int8 speedup / mAP cost / power delta
