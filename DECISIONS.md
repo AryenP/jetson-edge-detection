@@ -143,6 +143,20 @@ without on-device NMS, which needs the x86 compiler.
 Decision: a fourth-week column if a kit is lent, never the primary target.
 The INT8 sensitivity work is TensorRT-specific and is the headline.
 
+## If the loan is an original Jetson Nano (open)
+
+The 148 course has no Orin to lend and may find an older Nano. That board
+runs JetPack 4.6 at the newest, which means Python 3.6 and TensorRT 8.2.
+Nothing here runs on it as written: the runner uses the TensorRT 10 tensor
+API, the builder uses `set_memory_pool_limit`, and the code uses 3.10
+type-hint syntax and dataclasses. The compatibility pass is about a day:
+`Optional[...]` hints, the dataclasses backport, `execute_async_v2` with
+bindings, `max_workspace_size`, and the explicit-batch flag that TensorRT 8
+still requires. Worth doing only if a Nano is actually handed over; it
+would be its own column (Maxwell GPU without fast INT8 paths, so INT8 may
+be no faster than FP16 there, which is itself a result worth a row). Not
+started.
+
 ## Reversals
 
 **Q/DQ remainder precision: fp16 to fp32.** The first version of
